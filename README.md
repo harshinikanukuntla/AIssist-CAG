@@ -154,3 +154,7 @@ about you means adding documents to `backend/documents/`, not training
 model weights. See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#3-why-cag-not-rag)
 for why, and what would change if a fork's needs actually called for
 fine-tuning or retrieval instead.
+
+## License
+
+[MIT](LICENSE)
