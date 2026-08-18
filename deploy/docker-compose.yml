@@ -1,0 +1,47 @@
+# Deploy target: a single small VPS running Docker.
+#
+# `app` is the FastAPI backend (holds the CAG document cache in memory,
+# no GPU needed since inference is delegated to NVIDIA NIM's hosted API
+# by default). `caddy` terminates HTTPS automatically via Let's Encrypt
+# and reverse-proxies to `app` — simpler than hand-rolling nginx+certbot.
+#
+# Usage: from the deploy/ directory, `docker compose up -d --build`
+# after creating backend/.env from backend/.env.example.
+
+services:
+  app:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env
+    expose:
+      - "8000"
+    # Uncomment to also scale out horizontally (requires
+    # SESSION_BACKEND=redis + REDIS_URL in backend/.env, and the redis
+    # service below):
+    # deploy:
+    #   replicas: 2
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+  # Optional: only needed if you set SESSION_BACKEND=redis in backend/.env
+  # to share session state across multiple `app` replicas.
+  # redis:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

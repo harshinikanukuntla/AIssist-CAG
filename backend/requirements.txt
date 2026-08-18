@@ -1,0 +1,10 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+openai==1.59.7
+pydantic-settings==2.7.1
+slowapi==0.1.9
+
+# Optional: only needed if SESSION_BACKEND=redis (see .env.example).
+# Left installed by default since it's small and pure-Python; the app
+# only imports it lazily when REDIS_URL is actually configured.
+redis==5.2.1

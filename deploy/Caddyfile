@@ -1,0 +1,6 @@
+# Replace with your actual API subdomain, e.g. api.yourportfolio.com
+# Caddy automatically provisions and renews HTTPS via Let's Encrypt for
+# any real domain pointed at this server — no manual certbot needed.
+api.yourportfolio.com {
+	reverse_proxy app:8000
+}

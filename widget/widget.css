@@ -1,0 +1,38 @@
+/**
+ * Reference stylesheet — NOT required for the widget to work.
+ *
+ * widget.js injects its own <style> tag at runtime so a single <script>
+ * include is enough to drop it into any site. This file exists as a
+ * readable reference for the class names in use, in case you want to
+ * override the look via your own site's stylesheet instead of the
+ * data-accent-color attribute (your rules will win as long as they're
+ * loaded after widget.js, since it appends its <style> tag on load).
+ */
+
+.aissist-bubble {
+  /* floating launcher button */
+}
+
+.aissist-panel {
+  /* chat panel container, toggled open via the .open class */
+}
+
+.aissist-header {
+  /* panel header bar with assistant name + close button */
+}
+
+.aissist-messages {
+  /* scrollable message list */
+}
+
+.aissist-msg.user {
+  /* visitor's own messages */
+}
+
+.aissist-msg.assistant {
+  /* assistant replies */
+}
+
+.aissist-inputrow {
+  /* input box + send button row */
+}

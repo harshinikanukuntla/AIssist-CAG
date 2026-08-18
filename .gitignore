@@ -1,0 +1,36 @@
+# Secrets / local config
+.env
+backend/.env
+*.env
+!.env.example
+!backend/.env.example
+
+# Your own documents are personal to your fork — keep them out of any
+# shared history by default. Remove this line if you want yours tracked.
+backend/documents/*.md
+backend/documents/*.txt
+!backend/documents/README.md
+!backend/documents/example/
+
+# Personal-only notes — anything in here (interview prep, private drafts,
+# scratch notes to yourself) never leaves your machine. Public docs live
+# in docs/ directly; only docs/private/ is excluded.
+docs/private/
+
+# Catch-all for ad hoc personal notes anywhere in the repo, in case you
+# drop a quick file outside docs/private/ and don't want it tracked.
+*.private.md
+NOTES.md
+TODO.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Docker / editors / OS
+.DS_Store
+.idea/
+.vscode/
