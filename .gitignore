@@ -11,6 +11,7 @@ backend/documents/*.md
 backend/documents/*.txt
 !backend/documents/README.md
 !backend/documents/example/
+.claude/*
 
 # Personal-only notes — anything in here (interview prep, private drafts,
 # scratch notes to yourself) never leaves your machine. Public docs live
