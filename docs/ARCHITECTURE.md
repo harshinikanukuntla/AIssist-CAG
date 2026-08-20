@@ -154,6 +154,24 @@ self-directed multi-step chain that could spin. On top of that:
 - **Bounded conversation history** (`sessions.py`, `MAX_HISTORY_MESSAGES`) —
   history sent to the model per-request is capped, so a long conversation's
   token cost doesn't grow unbounded.
+- **Session-id length cap** (`guardrails.py`, `MAX_SESSION_ID_CHARS`) —
+  `session_id` is client-supplied and used directly as a store key (an
+  in-memory dict key, or a Redis key when `SESSION_BACKEND=redis`), so it's
+  validated and capped like any other untrusted input rather than trusted
+  blindly.
+- **Bounded in-memory session store** (`sessions.py`,
+  `MAX_SESSIONS_IN_MEMORY`) — the default in-memory `SessionStore` caps how
+  many distinct sessions it holds and evicts the least-recently-seen one
+  once the cap is hit, so a stream of unique `session_id`s (many real
+  visitors, or a script that never reuses one) can't grow process memory
+  unboundedly between restarts. The Redis-backed store doesn't need this —
+  Redis already expires keys via `SESSION_TTL_SECONDS`.
+- **Graceful degradation on session-store failures** (`main.py`) — reads
+  and writes to `session_store` are caught broadly and degrade (fresh
+  session on a failed read, silently skipped on a failed write) rather than
+  surfacing a raw 500, the same principle already applied to LLM call
+  failures. This matters most for `SESSION_BACKEND=redis`, where a
+  transient network blip shouldn't take the whole endpoint down.
 
 ## 6. Staying on-topic, gracefully
 
@@ -197,6 +215,14 @@ that's already answering:
 - **Logging** captures query/response metadata for the owner's own
   debugging (including flagged injection attempts), not raw long-term
   visitor IP storage.
+- **Container runs as a non-root user** (`backend/Dockerfile`) — standard
+  hardening for an image meant to be deployed as-is by forks, on the
+  principle that the app needs no special privileges to serve requests.
+- **Widget resilience** (`widget.js`) — a client-side request timeout
+  (`REQUEST_TIMEOUT_MS`, via `AbortController`) bounds how long the UI will
+  wait before showing a fallback message, and an `isSending` guard prevents
+  a fast double-Enter or Enter-then-click from firing two concurrent
+  requests for one visitor action.
 
 ## 8. Reusability / fork design
 

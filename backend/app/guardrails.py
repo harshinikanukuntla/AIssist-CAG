@@ -3,11 +3,12 @@ Guardrails that keep this a single, bounded LLM call per turn — no
 agent loop, no runaway cost, no unbounded sessions.
 
 Rate limiting is IP-based via slowapi (protects against scripted abuse
-driving up LLM API cost). Turn caps and input-length caps are enforced
-per session. `looks_like_injection_attempt` is a soft heuristic used
-only for logging/telemetry — the actual defense against prompt/context
-extraction lives in the system prompt itself (see main.py), since
-keyword-matching alone is too brittle to safely block on.
+driving up LLM API cost). Turn caps, input-length caps, and session-id
+length caps are enforced per request. `looks_like_injection_attempt` is
+a soft heuristic used only for logging/telemetry — the actual defense
+against prompt/context extraction lives in the system prompt itself
+(see main.py), since keyword-matching alone is too brittle to safely
+block on.
 """
 
 import re
@@ -28,6 +29,17 @@ class InputTooLongError(Exception):
     pass
 
 
+class InvalidSessionIdError(Exception):
+    pass
+
+
+# session_id is client-supplied (the widget generates a UUID, but nothing
+# stops a direct API caller from sending anything). It's used as a dict key
+# in-memory and as a Redis key when SESSION_BACKEND=redis, so an unbounded
+# string here is a cheap way to bloat either store — cap it like any other
+# untrusted input.
+MAX_SESSION_ID_CHARS = 128
+
 _INJECTION_PATTERNS = [
     re.compile(r"ignore (all|any|previous|prior|the above)?\s*instructions", re.I),
     re.compile(r"(reveal|print|repeat|show).{0,20}(system prompt|instructions|prompt)", re.I),
@@ -43,6 +55,13 @@ def looks_like_injection_attempt(message: str) -> bool:
 def check_input_length(message: str, max_chars: int) -> None:
     if len(message) > max_chars:
         raise InputTooLongError(f"Message exceeds the {max_chars}-character limit.")
+
+
+def check_session_id(session_id: str, max_chars: int = MAX_SESSION_ID_CHARS) -> None:
+    if not session_id.strip():
+        raise InvalidSessionIdError("session_id cannot be empty.")
+    if len(session_id) > max_chars:
+        raise InvalidSessionIdError(f"session_id exceeds the {max_chars}-character limit.")
 
 
 def check_turn_limit(state: SessionState, max_turns: int) -> None:

@@ -41,5 +41,8 @@ class LLMClient:
         except OpenAIError as exc:
             raise LLMUnavailableError("The assistant is temporarily unavailable.") from exc
 
+        if not response.choices:
+            raise LLMUnavailableError("The assistant returned an empty response.")
+
         choice = response.choices[0]
         return (choice.message.content or "").strip()

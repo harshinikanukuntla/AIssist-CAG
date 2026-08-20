@@ -17,6 +17,13 @@ from app.config import Settings
 
 MAX_HISTORY_MESSAGES = 12  # ~6 user/assistant turns kept as context
 
+# Caps the in-memory store's dict size so a stream of unique session_ids
+# (many real visitors, or a script that never reuses one) can't grow
+# process memory unboundedly between restarts. Not exposed as an env var —
+# like MAX_HISTORY_MESSAGES, it's an internal implementation limit a fork
+# would never need to tune, not a per-deployment persona/provider setting.
+MAX_SESSIONS_IN_MEMORY = 5000
+
 
 @dataclass
 class SessionState:
@@ -63,6 +70,19 @@ class InMemorySessionStore(SessionStore):
 
     def save(self, session_id: str, state: SessionState) -> None:
         self._sessions[session_id] = state
+        if len(self._sessions) > MAX_SESSIONS_IN_MEMORY:
+            self._evict_oldest()
+
+    def _evict_oldest(self) -> None:
+        # One eviction per save that pushes over the cap is enough to stay
+        # at the limit, since save() is called at most once per turn. A
+        # plain O(n) scan is fine at this scale (thousands of sessions) and
+        # avoids pulling in a full LRU-cache dependency for what's meant to
+        # be a lightweight single-VPS store in the first place. Because it
+        # evicts by oldest last_seen, expired-but-not-yet-overwritten
+        # sessions are always the first to go.
+        oldest_id = min(self._sessions, key=lambda sid: self._sessions[sid].last_seen)
+        del self._sessions[oldest_id]
 
 
 class RedisSessionStore(SessionStore):

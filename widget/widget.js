@@ -56,6 +56,11 @@
 
   var sessionId = getSessionId();
 
+  // Generous margin over the backend's own default LLM_TIMEOUT_SECONDS
+  // (20s), so a slow-but-legitimately-completing request isn't cut off
+  // client-side before the backend's own timeout would have fired.
+  var REQUEST_TIMEOUT_MS = 30000;
+
   var styleEl = document.createElement("style");
   styleEl.textContent =
     "" +
@@ -115,6 +120,7 @@
   var closeBtn = panel.querySelector(".aissist-close");
 
   var greeted = false;
+  var isSending = false;
 
   function addMessage(role, text) {
     var el = document.createElement("div");
@@ -137,20 +143,33 @@
   closeBtn.addEventListener("click", togglePanel);
 
   async function sendMessage() {
+    // Guards against a fast double-Enter or Enter-then-click firing two
+    // concurrent requests — disabling the button alone doesn't stop the
+    // textarea's keydown handler from calling this again before the first
+    // request's disabled state has visibly taken effect.
+    if (isSending) return;
+
     var text = inputEl.value.trim();
     if (!text) return;
 
+    isSending = true;
     inputEl.value = "";
     sendBtn.disabled = true;
     addMessage("user", text);
     var pending = addMessage("assistant", "Thinking...");
     pending.classList.add("pending");
 
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () {
+      controller.abort();
+    }, REQUEST_TIMEOUT_MS);
+
     try {
       var res = await fetch(config.backendUrl + "/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ session_id: sessionId, message: text }),
+        signal: controller.signal,
       });
       var data = await res.json();
       pending.remove();
@@ -161,8 +180,15 @@
       }
     } catch (err) {
       pending.remove();
-      addMessage("assistant", "I couldn't reach the server. Please try again shortly.");
+      addMessage(
+        "assistant",
+        err.name === "AbortError"
+          ? "That's taking too long to respond. Please try again."
+          : "I couldn't reach the server. Please try again shortly."
+      );
     } finally {
+      clearTimeout(timeoutId);
+      isSending = false;
       sendBtn.disabled = false;
       inputEl.focus();
     }

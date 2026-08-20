@@ -20,15 +20,17 @@ from app.cache_context import EmptyDocumentCacheError, build_document_cache
 from app.config import get_settings
 from app.guardrails import (
     InputTooLongError,
+    InvalidSessionIdError,
     TurnLimitExceededError,
     check_input_length,
+    check_session_id,
     check_turn_limit,
     limiter,
     looks_like_injection_attempt,
 )
 from app.llm_client import LLMClient, LLMUnavailableError
 from app.prompt_builder import build_system_prompt
-from app.sessions import build_session_store
+from app.sessions import SessionState, build_session_store
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("aissist_cag")
@@ -90,6 +92,11 @@ async def health():
 @limiter.limit(f"{settings.rate_limit_per_minute}/minute")
 async def chat(request: Request, body: ChatRequest):
     try:
+        check_session_id(body.session_id)
+    except InvalidSessionIdError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    try:
         check_input_length(body.message, settings.max_input_chars)
     except InputTooLongError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -100,7 +107,17 @@ async def chat(request: Request, body: ChatRequest):
     if looks_like_injection_attempt(body.message):
         logger.warning("Possible prompt-injection attempt in session %s", body.session_id)
 
-    state = session_store.get(body.session_id)
+    # Session-store reads/writes are caught broadly and degrade gracefully
+    # (fresh session on read failure, silently skipped on write failure)
+    # rather than raising a raw 500 — the same "no ugly failure visible to
+    # the visitor" principle used for LLM call failures below. This matters
+    # most for SESSION_BACKEND=redis, where a transient network blip
+    # shouldn't take down the whole endpoint.
+    try:
+        state = session_store.get(body.session_id)
+    except Exception as exc:
+        logger.error("Session store read failed for session %s: %s", body.session_id, exc)
+        state = SessionState()
 
     try:
         check_turn_limit(state, settings.max_turns_per_session)
@@ -128,6 +145,9 @@ async def chat(request: Request, body: ChatRequest):
         )
 
     state.append_turn(body.message, reply)
-    session_store.save(body.session_id, state)
+    try:
+        session_store.save(body.session_id, state)
+    except Exception as exc:
+        logger.error("Session store write failed for session %s: %s", body.session_id, exc)
 
     return ChatResponse(session_id=body.session_id, reply=reply, turn_count=state.turn_count)
